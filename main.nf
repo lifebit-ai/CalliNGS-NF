@@ -39,8 +39,14 @@
 
 params.genome     = "$baseDir/data/genome.fa"
 params.variants   = "$baseDir/data/known_variants.vcf.gz"
-params.blacklist  = "$baseDir/data/blacklist.bed" 
-params.reads      = "$baseDir/data/reads/rep1_{1,2}.fq.gz"
+params.blacklist  = "$baseDir/data/blacklist.bed"
+
+//Modified for D. support
+//params.reads = "$baseDir/data/reads/rep1_{1,2}.fq.gz"
+params.reads = "$baseDir/data/reads/"
+readsReady = "${params.reads}/rep1_{1,2}.fq.gz"
+//----
+
 params.results    = "results"
 params.gatk       = '/usr/local/bin/GenomeAnalysisTK.jar'
 params.gatk_launch = "java -jar $params.gatk" 
@@ -64,7 +70,7 @@ GATK            = params.gatk_launch
 genome_file     = file(params.genome)
 variants_file   = file(params.variants)
 blacklist_file  = file(params.blacklist)
-reads_ch        = Channel.fromFilePairs(params.reads)
+reads_ch        = Channel.fromFilePairs(readsReady)
 
 
 /**********
