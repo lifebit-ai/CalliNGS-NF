@@ -432,6 +432,8 @@ process '6B_prepare_vcf_for_ase' {
 }
 
 
+
+
 /*
  * Group data for allele-specific expression.
  *
@@ -500,7 +502,7 @@ process '6C_ASE_knownSNPs' {
 
 
  process visualisations {
-    publishDir "${params.output}/Visualisations", mode: 'copy'
+    publishDir "${params.results}/Visualisations", mode: 'copy'
 
     container 'lifebitai/vizjson:latest'
 
@@ -513,6 +515,6 @@ process '6C_ASE_knownSNPs' {
 
     script:
     """
-    img2json.py $params.output/$sampleId/AF.histogram.pdf "A histogram plot to show allele frequency of common SNVs"
+    img2json.py $params.results/$sampleId/AF.histogram.pdf "A histogram plot to show allele frequency of common SNVs"
     """
 }
