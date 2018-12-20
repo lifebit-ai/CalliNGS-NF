@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2017-2018, Centre for Genomic Regulation (CRG).
  *
- *   This file is part of 'CalliNGS-NF': 
+ *   This file is part of 'CalliNGS-NF':
  *   A Nextflow pipeline for Variant Calling with NGS data
  *
  *   CalliNGS-NF is free software: you can redistribute it and/or modify
@@ -17,25 +17,25 @@
  *   You should have received a copy of the GNU General Public License
  *   along with CalliNGS-NF.  If not, see <http://www.gnu.org/licenses/>.
  */
- 
-  
-/* 
+
+
+/*
  * 'CalliNGS-NF' - A Nextflow pipeline for variant calling with NGS data
- * 
- * This pipeline that reproduces steps from the GATK best practics of SNP 
+ *
+ * This pipeline that reproduces steps from the GATK best practics of SNP
  * calling with RNAseq data procedure:
  * https://software.broadinstitute.org/gatk/guide/article?id=3891
- * 
- * Anna Vlasova 
- * Emilio Palumbo 
+ *
+ * Anna Vlasova
+ * Emilio Palumbo
  * Paolo Di Tommaso
- * Evan Floden 
+ * Evan Floden
  */
 
 
 /*
  * Define the default parameters
- */ 
+ */
 
 params.genome     = "$baseDir/data/genome.fa"
 params.variants   = "$baseDir/data/known_variants.vcf.gz"
@@ -49,10 +49,10 @@ readsReady = "${params.reads}/rep1_{1,2}.fq.gz"
 
 params.results    = "results"
 params.gatk       = '/usr/local/bin/GenomeAnalysisTK.jar'
-params.gatk_launch = "java -jar $params.gatk" 
+params.gatk_launch = "java -jar $params.gatk"
 
 log.info """\
-C A L L I N G S  -  N F    v 1.0 
+C A L L I N G S  -  N F    v 1.0
 ================================
 genome   : $params.genome
 reads    : $params.reads
@@ -79,15 +79,15 @@ reads_ch        = Channel.fromFilePairs(readsReady)
  * Process 1A: Create a FASTA genome index (.fai) with samtools for GATK
  */
 
-process '1A_prepare_genome_samtools' { 
+process '1A_prepare_genome_samtools' {
   tag "$genome.baseName"
-  
-  input: 
-      file genome from genome_file 
- 
-  output: 
-      file "${genome}.fai" into genome_index_ch  
-  
+
+  input:
+      file genome from genome_file
+
+  output:
+      file "${genome}.fai" into genome_index_ch
+
   script:
   """
   samtools faidx ${genome}
@@ -146,14 +146,14 @@ process '1C_prepare_star_genome_index' {
 process '1D_prepare_vcf_file' {
   tag "$variantsFile.baseName"
 
-  input: 
+  input:
       file variantsFile from variants_file
       file blacklisted from blacklist_file
 
   output:
       set file("${variantsFile.baseName}.filtered.recode.vcf.gz"), file("${variantsFile.baseName}.filtered.recode.vcf.gz.tbi") into prepared_vcf_ch
-  
-  script:  
+
+  script:
   """
   vcftools --gzvcf $variantsFile -c \
            --exclude-bed ${blacklisted} \
@@ -179,15 +179,15 @@ process '1D_prepare_vcf_file' {
 process '2_rnaseq_mapping_star' {
   tag "$replicateId"
 
-  input: 
-      file genome from genome_file 
+  input:
+      file genome from genome_file
       file genomeDir from genome_dir_ch
-      set replicateId, file(reads) from reads_ch 
+      set replicateId, file(reads) from reads_ch
 
-  output: 
+  output:
       set replicateId, file('Aligned.sortedByCoord.out.bam'), file('Aligned.sortedByCoord.out.bam.bai') into aligned_bam_ch
 
-  script:    
+  script:
   """
   # ngs-nf-dev Align reads to genome
   STAR --genomeDir $genomeDir \
@@ -198,17 +198,17 @@ process '2_rnaseq_mapping_star' {
        --alignSJoverhangMin 8 \
        --alignSJDBoverhangMin 1 \
        --outFilterMismatchNmax 999
-    
-  # 2nd pass (improve alignmets using table of splice junctions and create a new index)  
-  mkdir genomeDir  
+
+  # 2nd pass (improve alignmets using table of splice junctions and create a new index)
+  mkdir genomeDir
   STAR --runMode genomeGenerate \
        --genomeDir genomeDir \
        --genomeFastaFiles $genome \
        --sjdbFileChrStartEnd SJ.out.tab \
        --sjdbOverhang 75 \
-       --runThreadN ${task.cpus}  
-    
-  # Final read alignments  
+       --runThreadN ${task.cpus}
+
+  # Final read alignments
   STAR --genomeDir genomeDir \
        --readFilesIn $reads \
        --runThreadN ${task.cpus} \
@@ -234,23 +234,23 @@ process '2_rnaseq_mapping_star' {
  * PART 3: GATK Prepare Mapped Reads
  *
  * Process 3: Split reads that contain Ns in their CIGAR string.
- *            Creates k+1 new reads (where k is the number of N cigar elements) 
- *            that correspond to the segments of the original read beside/between 
+ *            Creates k+1 new reads (where k is the number of N cigar elements)
+ *            that correspond to the segments of the original read beside/between
  *            the splicing events represented by the Ns in the original CIGAR.
  */
 
 process '3_rnaseq_gatk_splitNcigar' {
   tag "$replicateId"
-  
-  input: 
-      file genome from genome_file 
+
+  input:
+      file genome from genome_file
       file index from genome_index_ch
       file genome_dict from genome_dict_ch
       set replicateId, file(bam), file(index) from aligned_bam_ch
 
   output:
       set replicateId, file('split.bam'), file('split.bai') into splitted_bam_ch
-  
+
   script:
   """
   # SplitNCigarReads and reassign mapping qualities
@@ -272,16 +272,16 @@ process '3_rnaseq_gatk_splitNcigar' {
 /***********
  * PART 4: GATK Base Quality Score Recalibration Workflow
  *
- * Process 4: Base recalibrate to detect systematic errors in base quality scores, 
+ * Process 4: Base recalibrate to detect systematic errors in base quality scores,
  *            select unique alignments and index
- *             
+ *
  */
 
 process '4_rnaseq_gatk_recalibrate' {
   tag "$replicateId"
-    
-  input: 
-      file genome from genome_file 
+
+  input:
+      file genome from genome_file
       file index from genome_index_ch
       file dict from genome_dict_ch
       set replicateId, file(bam), file(index) from splitted_bam_ch
@@ -289,8 +289,8 @@ process '4_rnaseq_gatk_recalibrate' {
 
   output:
       set sampleId, file("${replicateId}.final.uniq.bam"), file("${replicateId}.final.uniq.bam.bai") into (final_output_ch, bam_for_ASE_ch)
-  
-  script: 
+
+  script:
   sampleId = replicateId.replaceAll(/[12]$/,'')
   """
   # Indel Realignment and Base Recalibration
@@ -304,7 +304,7 @@ process '4_rnaseq_gatk_recalibrate' {
           -R ${genome} -I ${bam} \
           --downsampling_type NONE \
           -nct ${task.cpus} \
-          -o final.rnaseq.grp 
+          -o final.rnaseq.grp
 
   $GATK -T PrintReads \
           -R ${genome} -I ${bam} \
@@ -331,9 +331,9 @@ process '4_rnaseq_gatk_recalibrate' {
  * PART 5: GATK Variant Calling
  *
  * Process 5: Call variants with GATK HaplotypeCaller.
- *            Calls SNPs and indels simultaneously via local de-novo assembly of 
+ *            Calls SNPs and indels simultaneously via local de-novo assembly of
  *            haplotypes in an active region.
- *            Filter called variants with GATK VariantFiltration.    
+ *            Filter called variants with GATK VariantFiltration.
  */
 
 
@@ -345,8 +345,8 @@ process '5_rnaseq_call_variants' {
       file index from genome_index_ch
       file dict from genome_dict_ch
       set sampleId, file(bam), file(bai) from final_output_ch.groupTuple()
-  
-  output: 
+
+  output:
       set sampleId, file('final.vcf') into vcf_files
 
   script:
@@ -354,7 +354,7 @@ process '5_rnaseq_call_variants' {
   # fix absolute path in dict file
   sed -i 's@UR:file:.*${genome}@UR:file:${genome}@g' $dict
   echo "${bam.join('\n')}" > bam.list
-  
+
   # Variant calling
   $GATK -T HaplotypeCaller \
           -R $genome -I bam.list \
@@ -380,45 +380,45 @@ process '5_rnaseq_call_variants' {
 /***********
  * PART 6: Post-process variants file and prepare for Allele-Specific Expression and RNA Editing Analysis
  *
- * Process 6A: Post-process the VCF result  
+ * Process 6A: Post-process the VCF result
  */
 
 process '6A_post_process_vcf' {
   tag "$sampleId"
-  publishDir "$params.results/$sampleId" 
-  
+  publishDir "$params.results/$sampleId"
+
   input:
       set sampleId, file('final.vcf') from vcf_files
-      set file('filtered.recode.vcf.gz'), file('filtered.recode.vcf.gz.tbi') from prepared_vcf_ch 
-  output: 
+      set file('filtered.recode.vcf.gz'), file('filtered.recode.vcf.gz.tbi') from prepared_vcf_ch
+  output:
       set sampleId, file('final.vcf'), file('commonSNPs.diff.sites_in_files') into vcf_and_snps_ch
-  
+
   script:
   '''
   grep -v '#' final.vcf | awk '$7~/PASS/' |perl -ne 'chomp($_); ($dp)=$_=~/DP\\=(\\d+)\\;/; if($dp>=8){print $_."\\n"};' > result.DP8.vcf
-  
+
   vcftools --vcf result.DP8.vcf --gzdiff filtered.recode.vcf.gz  --diff-site --out commonSNPs
   '''
 }
 
-/* 
+/*
  * Process 6B: Prepare variants file for allele specific expression (ASE) analysis
  */
 
 process '6B_prepare_vcf_for_ase' {
   tag "$sampleId"
-  publishDir "$params.results/$sampleId" 
-  
-  input: 
+  publishDir "$params.results/$sampleId"
+
+  input:
       set sampleId, file('final.vcf'), file('commonSNPs.diff.sites_in_files') from vcf_and_snps_ch
-  output: 
-      set sampleId, file('known_snps.vcf') into vcf_for_ASE
+  output:
+      set sampleId, file('known_snps.vcf') into vcf_for_ASE, sample_viz
       file('AF.histogram.pdf') into gghist_pdfs
 
   script:
   '''
   awk 'BEGIN{OFS="\t"} $4~/B/{print $1,$2,$3}' commonSNPs.diff.sites_in_files  > test.bed
-    
+
   vcftools --vcf final.vcf --bed test.bed --recode --keep-INFO-all --stdout > known_snps.vcf
 
   grep -v '#'  known_snps.vcf | awk -F '\\t' '{print $10}' \
@@ -432,60 +432,62 @@ process '6B_prepare_vcf_for_ase' {
 }
 
 
-/* 
+
+
+/*
  * Group data for allele-specific expression.
- * 
+ *
  * The `bam_for_ASE_ch` emites tuples having the following structure, holding the final BAM/BAI files:
- *  
+ *
  *   ( sample_id, file_bam, file_bai )
- * 
+ *
  * The `vcf_for_ASE` channel emits tuples having the following structure, holding the VCF file:
- *  
- *   ( sample_id, output.vcf ) 
- * 
- * The BAMs are grouped together and merged with VCFs having the same sample id. Finally 
- * it creates a channel named `grouped_vcf_bam_bai_ch` emitting the following tuples: 
- *  
+ *
+ *   ( sample_id, output.vcf )
+ *
+ * The BAMs are grouped together and merged with VCFs having the same sample id. Finally
+ * it creates a channel named `grouped_vcf_bam_bai_ch` emitting the following tuples:
+ *
  *   ( sample_id, file_vcf, List[file_bam], List[file_bai] )
  */
 
 bam_for_ASE_ch
     .groupTuple()
     .phase(vcf_for_ASE)
-    .map{ left, right -> 
+    .map{ left, right ->
       def sampleId = left[0]
       def bam = left[1]
       def bai = left[2]
       def vcf = right[1]
-      tuple(sampleId, vcf, bam, bai)  
+      tuple(sampleId, vcf, bam, bai)
     }
     .set { grouped_vcf_bam_bai_ch }
 
 
-/* 
+/*
  * Process 6C: Allele-Specific Expression analysis with GATK ASEReadCounter.
- *             Calculates allele counts at a set of positions after applying 
- *             filters that are tuned for enabling allele-specific expression 
+ *             Calculates allele counts at a set of positions after applying
+ *             filters that are tuned for enabling allele-specific expression
  *             (ASE) analysis
  */
 
 process '6C_ASE_knownSNPs' {
   tag "$sampleId"
-  publishDir "$params.results/$sampleId" 
-  
+  publishDir "$params.results/$sampleId"
+
   input:
-      file genome from genome_file 
+      file genome from genome_file
       file index from genome_index_ch
       file dict from genome_dict_ch
       set sampleId, file(vcf),  file(bam), file(bai) from grouped_vcf_bam_bai_ch
-  
+
   output:
       file "ASE.tsv"
-  
+
   script:
   """
   echo "${bam.join('\n')}" > bam.list
-    
+
   $GATK -R ${genome} \
           -T ASEReadCounter \
           -o ASE.tsv \
@@ -498,3 +500,21 @@ process '6C_ASE_knownSNPs' {
  *  END OF PART 6
  ******/
 
+
+ process visualisations {
+    publishDir "${params.results}/Visualisations", mode: 'copy'
+
+    container 'lifebitai/vizjson:latest'
+
+    input:
+    file pdf from gghist_pdfs
+    set sampleId, file(vcf) from sample_viz
+
+    output:
+    file '.report.json' into results
+
+    script:
+    """
+    img2json.py $params.results/$sampleId/AF.histogram.pdf "A histogram plot to show allele frequency of common SNVs"
+    """
+}
