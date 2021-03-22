@@ -7,13 +7,13 @@ import json
 import sys
 import argparse
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description='This script is used to run API command to launch GATK RNAseq CloudOS job with example parameters.')
 
 # Change apikey with the apikey retrieved from CloudOS' webpage
-parser.add_argument("-H", "--apikey", help="Personal CloudOS API key, required.", required=True)
+parser.add_argument("-H", "--apikey", help="Personal CloudOS API key, required. You can find API key on CloudOS workspace or personal settings page, at 'Lifebit API' tab.", required=True)
 
 # Set id of workspace to run the command in
-parser.add_argument("-w", "--workspace_id", default="", help="CloudOS workspace id, optional. If not specified - personal workspace will be used.")
+parser.add_argument("-w", "--workspace_id", default="", help="CloudOS workspace id, optional. If not specified - personal workspace will be used. You can find workspace id the workspace settings page on CloudOS.")
 
 # This is the url for CloudOS service. Do not change it!
 parser.add_argument("-u", "--url", default="https://cloudos.lifebit.ai", help="CloudOS url. Default: 'https://cloudos.lifebit.ai'.")
